@@ -1,0 +1,312 @@
+`timescale 1ns/1ps
+
+module tb_tx_fsm_top;
+
+    //========================================================
+    // PARAMETERS
+    //========================================================
+    parameter SPEED_GRADE = 1;
+
+    reg clk;
+    reg rst_n;
+
+    reg startup_req;
+    reg phy_block_valid;
+
+    reg startup_done;
+    reg hdr_done;
+    reg fec_done;
+    reg scramble_done;
+    reg map_done;
+    reg tx_done;
+
+    wire startup_en;
+    wire hdr_en;
+    wire fec_en;
+    wire scramble_en;
+    wire map_en;
+    wire tx_en;
+    wire [2:0] current_debug_state;
+    wire [2:0] next_debug_state;
+
+    tx_fsm_top #(
+        .SPEED_GRADE(SPEED_GRADE)
+    ) dut (
+        .clk(clk),
+        .rst_n(rst_n),
+
+        .startup_req(startup_req),
+        .phy_block_valid(phy_block_valid),
+
+        .startup_done(startup_done),
+        .hdr_done(hdr_done),
+        .fec_done(fec_done),
+        .scramble_done(scramble_done),
+        .map_done(map_done),
+        .tx_done(tx_done),
+
+        .startup_en(startup_en),
+        .hdr_en(hdr_en),
+        .fec_en(fec_en),
+        .scramble_en(scramble_en),
+        .map_en(map_en),
+        .tx_en(tx_en),
+        .current_debug_state(current_debug_state),
+        .next_debug_state(next_debug_state)
+    );
+
+    initial begin
+     clk = 1'b0;
+     forever #5 clk = ~clk;
+    end
+
+    initial begin
+        // Initialize inputs
+        rst_n           = 1'b0;
+        startup_req     = 1'b0;
+        phy_block_valid = 1'b0;
+        startup_done    = 1'b0;
+        hdr_done        = 1'b0;
+        fec_done        = 1'b0;
+        scramble_done   = 1'b0;
+        map_done        = 1'b0;
+        tx_done         = 1'b0;
+
+        //====================================================
+        // RESET
+        //====================================================
+
+        #20;
+
+        rst_n = 1'b1;
+
+        $display("--------------------------------------------");
+        $display("RESET RELEASED");
+        $display("--------------------------------------------");
+
+        //====================================================
+        // IDLE -> STARTUP
+        //====================================================
+
+        #10;
+
+        startup_req     = 1'b1;
+        phy_block_valid = 1'b1;
+
+        @(posedge clk);
+
+        #1;
+
+        if (startup_en !== 1'b1) begin
+            $display("ERROR: STARTUP state not entered");
+            $finish;
+        end
+        $display("[%0t] STARTUP state entered", $time);
+
+        //====================================================
+        // STARTUP -> HEADER
+        //====================================================
+
+        // Keep startup active for 3 cycles
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+
+            if (startup_en !== 1'b1) begin
+                $display("ERROR: startup_en deasserted before startup_done");
+                $finish;
+            end
+        end
+
+        startup_done = 1'b1;
+
+        @(posedge clk);
+
+        #1;
+
+        startup_done = 1'b0;
+
+        if (hdr_en !== 1'b1) begin
+            $display("ERROR: HEADER state not entered");
+            $finish;
+        end
+
+        $display("[%0t] HEADER state entered", $time);
+
+        //====================================================
+        // HEADER -> FEC
+        //====================================================
+
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+
+            if (hdr_en !== 1'b1) begin
+                $display("ERROR: hdr_en deasserted before hdr_done");
+                $finish;
+            end
+        end
+
+        hdr_done = 1'b1;
+
+        @(posedge clk);
+
+        #1;
+
+        hdr_done = 1'b0;
+
+        if (fec_en !== 1'b1) begin
+            $display("ERROR: FEC state not entered");
+            $finish;
+        end
+
+        $display("[%0t] FEC state entered", $time);
+
+        //====================================================
+        // FEC -> SCRAMBLE
+        //====================================================
+
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+
+            if (fec_en !== 1'b1) begin
+                $display("ERROR: fec_en deasserted before fec_done");
+                $finish;
+            end
+        end
+
+        fec_done = 1'b1;
+
+        @(posedge clk);
+
+        #1;
+
+        fec_done = 1'b0;
+
+        if (scramble_en !== 1'b1) begin
+            $display("ERROR: SCRAMBLE state not entered");
+            $display("Time = %0t", $time);
+            $finish;
+        end
+
+        $display("[%0t] SCRAMBLE state entered", $time);
+
+        //====================================================
+        // SCRAMBLE -> MAP
+        //====================================================
+
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+
+            if (scramble_en !== 1'b1) begin
+                $display("ERROR: scramble_en deasserted before scramble_done");
+                $finish;
+            end
+        end
+
+        scramble_done = 1'b1;
+
+        @(posedge clk);
+
+        #1;
+
+        scramble_done = 1'b0;
+
+        if (map_en !== 1'b1) begin
+            $display("ERROR: MAP state not entered");
+            $display("Time = %0t", $time);
+            $finish;
+        end
+
+        $display("[%0t] MAP state entered", $time);
+
+        //====================================================
+        // MAP -> TX
+        //====================================================
+
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+
+            if (map_en !== 1'b1) begin
+                $display("ERROR: map_en deasserted before map_done");
+                $finish;
+            end
+        end
+
+        map_done = 1'b1;
+
+        @(posedge clk);
+
+        #1;
+
+        map_done = 1'b0;
+
+        if (tx_en !== 1'b1) begin
+            $display("ERROR: TX state not entered");
+            $display("Time = %0t", $time);
+            $finish;
+        end
+
+        $display("[%0t] TX state entered", $time);
+
+        //====================================================
+        // TX -> IDLE
+        //====================================================
+
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+
+            if (tx_en !== 1'b1) begin
+                $display("ERROR: tx_en deasserted before tx_done");
+                $finish;
+            end
+        end
+
+        tx_done = 1'b1;
+
+        @(posedge clk);
+
+        #1;
+
+        tx_done = 1'b0;
+
+        if ((startup_en  !== 1'b0) ||
+            (hdr_en      !== 1'b0) ||
+            (fec_en      !== 1'b0) ||
+            (scramble_en !== 1'b0) ||
+            (map_en      !== 1'b0) ||
+            (tx_en       !== 1'b0)) begin
+
+            $display("ERROR: FSM did not return to IDLE");
+            $display("Time = %0t", $time);
+            $finish;
+        end
+
+        $display("[%0t] FSM returned to IDLE", $time);
+
+        //====================================================
+        // TEST COMPLETE
+        //====================================================
+        $display("");
+        $display("============================================");
+        $display("       TX FSM TEST PASSED");
+        $display("============================================");
+        $display("");
+
+        #20;
+        $finish;
+
+    end
+
+    //========================================================
+    // MONITOR
+    //========================================================
+    initial begin
+      $monitor("[%0t] rst_n=%b startup_req=%b phy_valid=%b startup_en=%b hdr_en=%b fec_en=%b scramble_en=%b map_en=%b tx_en=%b done={%b,%b,%b,%b,%b,%b}",
+      $time,rst_n,startup_req,phy_block_valid,startup_en,hdr_en,fec_en,scramble_en,map_en,tx_en,startup_done,hdr_done,fec_done,scramble_done,map_done,tx_done);
+    end
+endmodule
